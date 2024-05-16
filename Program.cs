@@ -5,7 +5,7 @@ var apiBase = "https://{YOUR_URL_IN_HERE}.openai.azure.com/";
 var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 var deploymentName = "gpt3turbo"; 
 
-var searchEndpoint = "https://rag-test-ai-search.search.windows.net";
+var searchEndpoint = "https://{{YOUR_URL_IN_HERE}}.search.windows.net";
 var searchKey = Environment.GetEnvironmentVariable("SEARCH_KEY"); 
 var searchIndexName = "azureblob-index"; 
 var client = new OpenAIClient(new Uri(apiBase), new AzureKeyCredential(apiKey!));
