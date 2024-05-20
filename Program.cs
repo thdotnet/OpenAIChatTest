@@ -1,54 +1,83 @@
-﻿using Azure.AI.OpenAI;
-using Azure;
+﻿using Azure;
+using Azure.AI.OpenAI;
 
 var apiBase = "https://{YOUR_URL_IN_HERE}.openai.azure.com/";
 var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-var deploymentName = "gpt3turbo"; 
+var deploymentName = "gpt3turbo";
 
-var searchEndpoint = "https://rag-test-ai-search.search.windows.net";
+var searchEndpoint = "https://{{YOUR_SEARCH_SERVICE_IN_HERE}}.search.windows.net";
 var searchKey = Environment.GetEnvironmentVariable("SEARCH_KEY"); 
 var searchIndexName = "azureblob-index"; 
 var client = new OpenAIClient(new Uri(apiBase), new AzureKeyCredential(apiKey!));
 
-Console.WriteLine("Ask something");
-var prompt = Console.ReadLine();
+var interactionHistory = new List<Interaction>();
 
-var chatCompletionsOptions = new ChatCompletionsOptions()
+while (true)
 {
-    Messages =
+    Console.WriteLine("Ask something");
+    var prompt = Console.ReadLine();
+
+    interactionHistory.Add(new Interaction { Role = "user", Content = prompt });
+
+    var chatMessages = new List<ChatRequestUserMessage>();
+    foreach (var interaction in interactionHistory)
     {
-        new ChatRequestUserMessage(prompt)
-    },
-    AzureExtensionsOptions = new AzureChatExtensionsOptions()
-    {
-        Extensions =
+        chatMessages.Add(new ChatRequestUserMessage(interaction.Content)
         {
-            new AzureCognitiveSearchChatExtensionConfiguration()
+            Role = interaction.Role,
+        });
+    }
+
+    var chatCompletionsOptions = new ChatCompletionsOptions()
+    {
+        AzureExtensionsOptions = new AzureChatExtensionsOptions()
+        {
+            Extensions =
             {
-                SearchEndpoint = new Uri(searchEndpoint),
-                IndexName = searchIndexName,
-                Key = searchKey,
-                QueryType = AzureCognitiveSearchQueryType.Simple,
+                new AzureCognitiveSearchChatExtensionConfiguration()
+                {
+                    SearchEndpoint = new Uri(searchEndpoint),
+                    IndexName = searchIndexName,
+                    Key = searchKey,
+                    QueryType = AzureCognitiveSearchQueryType.Simple,
+                },
             },
         },
-    },
-    DeploymentName = deploymentName,
-    MaxTokens = 800,
-    Temperature = 0,
-};
+        DeploymentName = deploymentName,
+        MaxTokens = 800,
+        Temperature = 0,
+    };
 
-var response = await client.GetChatCompletionsAsync(chatCompletionsOptions);
+    foreach (var interaction in interactionHistory)
+    {
+        chatCompletionsOptions.Messages.Add(new ChatRequestUserMessage(interaction.Content)
+        {
+            Role = interaction.Role,
+        });
+    }
 
-var message = response.Value.Choices[0].Message;
+    var response = await client.GetChatCompletionsAsync(chatCompletionsOptions);
 
-Console.WriteLine($"{message.Role}: {message.Content}");
+    var message = response.Value.Choices[0].Message;
 
-Console.WriteLine($"Citations and other information:");
+    interactionHistory.Add(new Interaction { Role = "system", Content = message.Content });
 
-foreach (var contextMessage in message.AzureExtensionsContext.Messages)
-{
-    // Note: citations and other extension payloads from the "tool" role are often encoded JSON documents
-    // and need to be parsed as such; that step is omitted here for brevity.
-    Console.WriteLine($"{contextMessage.Role}: {contextMessage.Content}");
+   
+    Console.WriteLine($"{message.Role}: {message.Content}");
+
+    Console.WriteLine($"Citations and other information:");
+
+    foreach (var contextMessage in message.AzureExtensionsContext.Messages)
+    {
+        Console.WriteLine($"{contextMessage.Role}: {contextMessage.Content}");
+    }
+    //line breaks
+    Console.WriteLine("");
+    Console.WriteLine("");
 }
 
+public class Interaction
+{
+    public string Role { get; set; }
+    public string Content { get; set; }
+}
